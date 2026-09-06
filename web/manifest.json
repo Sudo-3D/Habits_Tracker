@@ -1,0 +1,15 @@
+{
+  "name": "Habit Tracker",
+  "short_name": "Habits",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3176/3176366.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

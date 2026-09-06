@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0a0e17">
+  <title>Habit Tracker</title>
+  <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/3176/3176366.png">
+
+  <!-- Set theme class and auth check before first paint -->
+  <script>
+    (function () {
+      const saved = localStorage.getItem('habit-tracker-theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const mode = saved || (prefersDark ? 'dark' : 'light');
+      if (mode === 'dark') document.documentElement.classList.add('dark');
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --panel-2: #f1f5f9;
+      --panel-border: rgba(15,23,42,0.08);
+      --text-primary: #0f172a;
+      --text-secondary: #334155;
+      --text-muted: #64748b;
+      --grid-line: rgba(15,23,42,0.06);
+      --shadow: rgba(15,23,42,0.06);
+    }
+    .dark {
+      --bg: #0a0e17;
+      --panel: #10141f;
+      --panel-2: #0c101a;
+      --panel-border: rgba(255,255,255,0.06);
+      --text-primary: #f8fafc;
+      --text-secondary: #cbd5e1;
+      --text-muted: #64748b;
+      --grid-line: rgba(255,255,255,0.05);
+      --shadow: rgba(2,6,23,0.5);
+    }
+    html, body { background: var(--bg); font-family: 'Inter', system-ui, sans-serif; }
+    body { color: var(--text-primary); transition: background .25s ease, color .25s ease; }
+    .font-display { font-family: 'Space Grotesk', 'Inter', sans-serif; }
+    .glass {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 1px 3px var(--shadow);
+      transition: background .25s ease, border-color .25s ease;
+    }
+    .glass-panel { background: var(--panel); border: 1px solid var(--panel-border); transition: background .25s ease, border-color .25s ease; }
+    .habit-card { background: var(--panel-2); border: 1px solid var(--panel-border); transition: background .25s ease, border-color .25s ease; }
+    .chip-time { background: var(--panel-2); color: var(--text-muted); border: 1px solid var(--panel-border); }
+    .menu-item:hover { background: var(--panel-2); }
+    ::-webkit-scrollbar { height: 6px; width: 6px; }
+    ::-webkit-scrollbar-thumb { background: rgba(129,140,248,0.35); border-radius: 999px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity:.35; } }
+    .pulse-dot { animation: pulse-dot 2.2s ease-in-out infinite; }
+    .num-tab { font-variant-numeric: tabular-nums; }
+    @media (prefers-reduced-motion: reduce) {
+      .pulse-dot { animation: none; }
+      * { transition-duration: 0.01ms !important; }
+    }
+    .markdown-content p { margin-bottom: 0.5rem; }
+    .markdown-content p:last-child { margin-bottom: 0; }
+    .markdown-content ul, .markdown-content ol { padding-right: 1.25rem; margin-bottom: 0.5rem; }
+    .markdown-content ul { list-style-type: disc; }
+    .markdown-content ol { list-style-type: decimal; }
+    .markdown-content strong { font-weight: 700; color: inherit; }
+  </style>
+</head>
+<body class="min-h-screen relative pb-20">
+
+  <div class="max-w-5xl mx-auto px-3 sm:px-6 py-5 sm:py-8 space-y-5 sm:space-y-7">
+
+    <!-- Header -->
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-xl sm:text-2xl shrink-0 shadow-lg shadow-indigo-950/30">
+          🔥
+        </div>
+        <div>
+          <h1 class="font-display text-lg sm:text-xl font-semibold leading-tight text-slate-900 dark:text-slate-50">Habit Tracker</h1>
+          <div class="flex items-center gap-1.5 mt-0.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 pulse-dot"></span>
+            <span class="text-[11px] sm:text-xs text-slate-500">Local instance · synced</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 self-end sm:self-auto">
+        <button onclick="toggleTheme()" aria-label="Toggle dark and light mode" class="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition shrink-0 cursor-pointer">
+          <svg class="w-[18px] h-[18px] hidden dark:block" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1.5m0 15V21m9-9h-1.5M4.5 12H3m15.36 6.36-1.06-1.06M6.7 6.7 5.64 5.64m12.72 0-1.06 1.06M6.7 17.3l-1.06 1.06M16.5 12a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z"/></svg>
+          <svg class="w-[18px] h-[18px] block dark:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
+        </button>
+
+        <!-- User Profile Avatar & Dropdown -->
+        <div class="relative">
+          <button onclick="toggleUserMenu()" id="userAvatarBtn" class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-indigo-600 text-slate-950 font-bold flex items-center justify-center shadow-md hover:opacity-90 transition shrink-0 cursor-pointer">
+            <span id="userAvatarChar">👤</span>
+          </button>
+
+          <div id="userDropdown" class="hidden absolute right-0 mt-2 w-56 glass-panel rounded-2xl shadow-2xl z-50 p-3 space-y-3 border border-slate-200 dark:border-white/10">
+            <div class="px-2 py-1 border-b border-slate-200 dark:border-white/10 pb-2">
+              <p class="text-[10px] text-slate-400 font-medium">Logged in as</p>
+              <p id="userMenuEmail" class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate block w-full">user@example.com</p>
+              <span id="userMenuId" class="text-[10px] bg-indigo-500/10 text-indigo-500 px-1.5 py-0.5 rounded font-mono mt-1 inline-block">ID: --</span>
+            </div>
+            <button onclick="logoutUser()" class="w-full justify-center px-3 py-2 rounded-xl text-xs font-medium text-rose-500 hover:bg-rose-500/10 transition flex items-center gap-2 cursor-pointer">
+            Sign Out
+            </button>
+          </div>
+        </div>
+
+        <button onclick="openModal('addModal')" class="flex-1 sm:flex-none bg-indigo-500 hover:bg-indigo-400 active:scale-[0.98] text-slate-950 font-semibold px-4 py-2.5 rounded-xl text-sm transition-all shadow-lg shadow-indigo-500/20 whitespace-nowrap cursor-pointer">
+          + Add habit
+        </button>
+      </div>
+    </header>
+
+    <!-- Stats row -->
+    <div class="grid grid-cols-2 gap-3 sm:gap-4">
+      <div class="glass rounded-2xl p-4 sm:p-5">
+        <p class="text-slate-500 text-[11px] sm:text-xs font-medium">Active habits</p>
+        <h2 id="habitCount" class="font-display num-tab text-2xl sm:text-3xl font-semibold mt-1 text-slate-900 dark:text-slate-50">0</h2>
+      </div>
+      <div class="glass rounded-2xl p-4 sm:p-5 space-y-2">
+        <div class="flex justify-between items-baseline">
+          <p class="text-slate-500 text-[11px] sm:text-xs font-medium">Commitment rate</p>
+          <span id="overallRateText" class="font-display num-tab text-sm sm:text-base font-semibold text-emerald-600 dark:text-emerald-400">0%</span>
+        </div>
+        <div class="w-full bg-slate-200 dark:bg-slate-900/80 h-2 rounded-full overflow-hidden">
+          <div id="overallProgressBar" class="bg-gradient-to-r from-emerald-500 to-emerald-400 h-full rounded-full transition-all duration-700 ease-out" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <section class="glass rounded-2xl p-4 sm:p-5 space-y-3 sm:space-y-4">
+      <div>
+        <h3 class="font-display font-semibold text-sm sm:text-base text-slate-900 dark:text-slate-100">Commitment curve</h3>
+        <p class="text-[11px] sm:text-xs text-slate-500 mt-0.5">Cumulative streak progress across every habit</p>
+      </div>
+      <div class="h-44 sm:h-56 w-full">
+        <canvas id="progressChart"></canvas>
+      </div>
+    </section>
+
+    <!-- Habits List -->
+    <section class="glass-panel rounded-2xl p-4 sm:p-5">
+      <h3 class="font-display font-semibold text-sm sm:text-base mb-4 text-slate-900 dark:text-slate-100">Your habits</h3>
+      <div id="habitsList" class="space-y-3">
+        <p class="text-slate-500 text-sm">Loading habits…</p>
+      </div>
+    </section>
+  </div>
+
+  <!-- Auth Overlay Modal -->
+  <div id="authModal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md flex justify-center items-center p-4 z-[99999]">
+    <div class="glass-panel p-6 sm:p-8 rounded-3xl w-full max-w-sm space-y-5 shadow-2xl border border-white/10">
+      <div class="text-center space-y-1">
+        <h3 id="authTitle" class="font-display text-xl font-bold text-slate-100">Welcome Back</h3>
+        <p class="text-xs text-slate-400">Sign in to sync your habits and chat with AI</p>
+      </div>
+
+      <div class="space-y-3">
+        <input id="authEmail" type="email" placeholder="Email address" class="w-full bg-slate-900 border border-slate-700/80 p-3 rounded-xl text-sm focus:outline-none focus:border-indigo-400 text-slate-100">
+        <input id="authPassword" type="password" placeholder="Password" class="w-full bg-slate-900 border border-slate-700/80 p-3 rounded-xl text-sm focus:outline-none focus:border-indigo-400 text-slate-100">
+      </div>
+
+      <button onclick="handleAuthSubmit()" id="authSubmitBtn" class="w-full bg-indigo-500 hover:bg-indigo-400 text-slate-950 py-3 rounded-xl text-sm font-semibold transition cursor-pointer">
+        Sign In
+      </button>
+
+      <div class="text-center">
+        <button onclick="toggleAuthMode()" id="authToggleBtn" class="text-xs text-indigo-400 hover:underline cursor-pointer">
+          Don't have an account? Register
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Habit Modal -->
+  <div id="addModal" class="hidden fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex justify-center items-end sm:items-center p-0 sm:p-4 z-50">
+    <div class="glass-panel p-5 sm:p-6 rounded-t-3xl sm:rounded-2xl w-full max-w-md space-y-4 shadow-2xl">
+      <h3 class="font-display text-lg font-semibold text-slate-900 dark:text-slate-50">Add new habit</h3>
+      <div class="space-y-2.5">
+        <input id="habitName" type="text" placeholder="Habit name, e.g. Read 20 pages" class="w-full bg-slate-100 dark:bg-slate-950/60 border border-slate-200 dark:border-white/10 p-3 rounded-xl text-sm focus:outline-none focus:border-indigo-400 placeholder:text-slate-400 dark:placeholder:text-slate-600 text-slate-900 dark:text-slate-100">
+        <input id="habitTime" type="time" value="21:00" class="w-full bg-slate-100 dark:bg-slate-950/60 border border-slate-200 dark:border-white/10 p-3 rounded-xl text-sm focus:outline-none focus:border-indigo-400 text-slate-900 dark:text-slate-100">
+      </div>
+      <div class="flex gap-2 pt-1">
+        <button onclick="saveHabit()" class="flex-1 bg-indigo-500 hover:bg-indigo-400 text-slate-950 py-3 sm:py-2.5 rounded-xl text-sm font-semibold transition">Save with AI</button>
+        <button onclick="closeModal('addModal')" class="px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-sm transition">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Habit Modal -->
+  <div id="editModal" class="hidden fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex justify-center items-end sm:items-center p-0 sm:p-4 z-50">
+    <div class="glass-panel p-5 sm:p-6 rounded-t-3xl sm:rounded-2xl w-full max-w-md space-y-4 shadow-2xl">
+      <h3 class="font-display text-lg font-semibold text-slate-900 dark:text-slate-50">Edit habit</h3>
+      <input id="editHabitId" type="hidden">
+      <div class="space-y-2.5">
+        <input id="editHabitName" type="text" placeholder="Habit name" class="w-full bg-slate-100 dark:bg-slate-950/60 border border-slate-200 dark:border-white/10 p-3 rounded-xl text-sm focus:outline-none focus:border-indigo-400 placeholder:text-slate-400 dark:placeholder:text-slate-600 text-slate-900 dark:text-slate-100">
+        <input id="editHabitTime" type="time" class="w-full bg-slate-100 dark:bg-slate-950/60 border border-slate-200 dark:border-white/10 p-3 rounded-xl text-sm focus:outline-none focus:border-indigo-400 text-slate-900 dark:text-slate-100">
+      </div>
+      <div class="flex gap-2 pt-1">
+        <button onclick="updateHabit()" class="flex-1 bg-indigo-500 hover:bg-indigo-400 text-slate-950 py-3 sm:py-2.5 rounded-xl text-sm font-semibold transition">Update habit</button>
+        <button onclick="closeModal('editModal')" class="px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-sm transition">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating AI Chat Button -->
+  <button id="openChatBtn" class="fixed bottom-5 right-5 w-14 h-14 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-600 text-slate-950 font-bold shadow-2xl flex items-center justify-center text-2xl hover:scale-105 active:scale-95 transition-all z-[9999] cursor-pointer">
+    💬
+  </button>
+
+  <!-- AI Chat Drawer -->
+  <div id="aiChatDrawer" style="display: none;" class="fixed bottom-24 right-5 w-[90vw] sm:w-[380px] h-[500px] max-h-[75vh] glass-panel rounded-3xl shadow-2xl border border-slate-200 dark:border-white/10 flex flex-col z-[9999] overflow-hidden transition-all">
+    <!-- Chat Header -->
+    <div class="p-4 bg-slate-100 dark:bg-slate-900/80 border-b border-slate-200 dark:border-white/10 flex justify-between items-center">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-500 flex items-center justify-center font-bold text-sm">🤖</div>
+        <div>
+          <h4 class="font-display text-sm font-semibold text-slate-900 dark:text-slate-100">Habit AI Coach</h4>
+          <p class="text-[10px] text-slate-500">متخصص في العادات والتنمية</p>
+        </div>
+      </div>
+      <button id="closeChatBtn" class="text-slate-400 hover:text-slate-200 text-lg font-bold p-1 cursor-pointer">✕</button>
+    </div>
+
+    <!-- Messages Box -->
+    <div id="chatMessages" class="flex-1 p-4 overflow-y-auto space-y-3 text-xs sm:text-sm">
+      <div class="bg-indigo-500/10 border border-indigo-500/20 p-3 rounded-2xl text-slate-800 dark:text-slate-200 max-w-[85%] leading-relaxed">
+        أهلاً بك! أنا مدربك الشخصي لبناء العادات والتنمية الذاتية. كيف يمكنني مساعدتك اليوم؟ 🎯
+      </div>
+    </div>
+
+    <!-- Chat Input Area -->
+    <div class="p-3 bg-slate-100 dark:bg-slate-900/80 border-t border-slate-200 dark:border-white/10 flex gap-2">
+      <input id="chatInput" type="text" onkeypress="handleChatKeyPress(event)" placeholder="اسأل عن عاداتك أو تنظيم وقتك..." class="flex-1 bg-slate-200 dark:bg-slate-950/80 border border-slate-300 dark:border-white/10 p-2.5 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-indigo-400 text-slate-900 dark:text-slate-100 placeholder:text-slate-400">
+      <button onclick="sendChatMessage()" class="bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-semibold px-3.5 py-2.5 rounded-xl text-xs transition cursor-pointer">إرسال</button>
+    </div>
+  </div>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then((reg) => console.log('SW registered successfully!', reg))
+          .catch((err) => console.log('SW registration failed:', err));
+      });
+    }
+
+    const N8N_WEBHOOK_URL = 'http://192.168.2.1:5678/webhook/add-habit';
+    const N8N_CHAT_WEBHOOK_URL = 'http://192.168.2.1:5678/webhook/habit-ai-chat';
+    const FLASK_API = 'http://192.168.1.110:8040';
+    let globalHabits = [];
+    let progressChartInstance = null;
+    let isLoginMode = true;
+
+    // Session ID إدارة للذاكرة
+    let sessionId = localStorage.getItem('habit_chat_session');
+    if (!sessionId) {
+      sessionId = 'session_' + Math.random().toString(36).substring(2, 9);
+      localStorage.setItem('habit_chat_session', sessionId);
+    }
+
+    // ---------- Auth & User Avatar Logic ----------
+    function toggleUserMenu() {
+      const dropdown = document.getElementById('userDropdown');
+      dropdown.classList.toggle('hidden');
+    }
+
+    function updateUserInfoUI(email, userId) {
+      if (email) {
+        document.getElementById('userMenuEmail').innerText = email;
+        document.getElementById('userAvatarChar').innerText = email.charAt(0).toUpperCase();
+      }
+      if (userId) {
+        document.getElementById('userMenuId').innerText = `ID: ${userId}`;
+      }
+    }
+
+    function toggleAuthMode() {
+      isLoginMode = !isLoginMode;
+      document.getElementById('authTitle').innerText = isLoginMode ? 'Welcome Back' : 'Create Account';
+      document.getElementById('authSubmitBtn').innerText = isLoginMode ? 'Sign In' : 'Register';
+      document.getElementById('authToggleBtn').innerText = isLoginMode 
+        ? "Don't have an account? Register" 
+        : "Already have an account? Sign In";
+    }
+
+    async function handleAuthSubmit() {
+      const email = document.getElementById('authEmail').value;
+      const password = document.getElementById('authPassword').value;
+
+      if (!email || !password) return alert('Please fill in all fields');
+
+      const endpoint = isLoginMode ? '/login' : '/register';
+      
+      try {
+        const res = await fetch(`${FLASK_API}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          alert(data.error || 'Authentication failed');
+          return;
+        }
+
+        if (isLoginMode) {
+          localStorage.setItem('user_id', data.user_id);
+          localStorage.setItem('user_email', email);
+          updateUserInfoUI(email, data.user_id);
+          document.getElementById('authModal').classList.add('hidden');
+          loadHabits();
+        } else {
+          alert('Registration successful! Please sign in.');
+          toggleAuthMode();
+        }
+      } catch (err) {
+        alert('Server connection error');
+      }
+    }
+
+    async function logoutUser() {
+      await fetch(`${FLASK_API}/logout`, { method: 'POST' });
+      localStorage.removeItem('user_id');
+      localStorage.removeItem('user_email');
+      document.getElementById('userDropdown').classList.add('hidden');
+      document.getElementById('authModal').classList.remove('hidden');
+    }
+
+    // ---------- AI Chat DB & Persistence Logic ----------
+    async function loadChatHistory() {
+      try {
+        const res = await fetch(`${FLASK_API}/chat/history/${sessionId}`);
+        const history = await res.json();
+        const messagesBox = document.getElementById('chatMessages');
+
+        if (history.length > 0) {
+          messagesBox.innerHTML = '';
+          history.forEach(item => {
+            const isUser = item.sender === 'user';
+            const formattedText = isUser ? item.message : marked.parse(item.message);
+            messagesBox.innerHTML += `
+              <div class="flex ${isUser ? 'justify-end' : 'justify-start'}">
+                <div class="${isUser ? 'bg-indigo-500 text-slate-950 font-medium' : 'bg-indigo-500/10 border border-indigo-500/20 text-slate-800 dark:text-slate-200'} p-3 rounded-2xl max-w-[85%] leading-relaxed markdown-content">
+                  ${formattedText}
+                </div>
+              </div>
+            `;
+          });
+          messagesBox.scrollTop = messagesBox.scrollHeight;
+        }
+      } catch (err) {
+        console.log('Error loading chat history:', err);
+      }
+    }
+
+    async function saveMessageToDB(sender, message) {
+      try {
+        await fetch(`${FLASK_API}/chat/save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, sender, message })
+        });
+      } catch (err) {
+        console.log('Error saving message to DB:', err);
+      }
+    }
+
+    function toggleChat() {
+      const drawer = document.getElementById('aiChatDrawer');
+      if (drawer) {
+        const isHidden = drawer.style.display === 'none' || drawer.style.display === '';
+        drawer.style.display = isHidden ? 'flex' : 'none';
+        if (isHidden) loadChatHistory();
+      }
+    }
+
+    function handleChatKeyPress(e) {
+      if (e.key === 'Enter') sendChatMessage();
+    }
+
+    async function sendChatMessage() {
+      const input = document.getElementById('chatInput');
+      const message = input.value.trim();
+      if (!message) return;
+
+      const messagesBox = document.getElementById('chatMessages');
+
+      messagesBox.innerHTML += `
+        <div class="flex justify-end">
+          <div class="bg-indigo-500 text-slate-950 font-medium p-3 rounded-2xl max-w-[85%] leading-relaxed">
+            ${message}
+          </div>
+        </div>
+      `;
+      input.value = '';
+      messagesBox.scrollTop = messagesBox.scrollHeight;
+      saveMessageToDB('user', message);
+
+      const loadingId = 'loading_' + Date.now();
+      messagesBox.innerHTML += `
+        <div id="${loadingId}" class="bg-slate-200 dark:bg-slate-800 p-3 rounded-2xl text-slate-400 max-w-[85%] animate-pulse">
+          جاري التفكير... 🧠
+        </div>
+      `;
+      messagesBox.scrollTop = messagesBox.scrollHeight;
+
+      try {
+        const response = await fetch(N8N_CHAT_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: sessionId,
+            action: "sendMessage",
+            chatInput: message
+          })
+        });
+
+        const data = await response.json();
+        const loadingEl = document.getElementById(loadingId);
+        if (loadingEl) loadingEl.remove();
+
+        const rawReply = data.output || data.text || (typeof data === 'string' ? data : JSON.stringify(data));
+        const formattedReply = marked.parse(rawReply);
+
+        messagesBox.innerHTML += `
+          <div class="bg-indigo-500/10 border border-indigo-500/20 p-3 rounded-2xl text-slate-800 dark:text-slate-200 max-w-[85%] leading-relaxed markdown-content">
+            ${formattedReply}
+          </div>
+        `;
+        saveMessageToDB('ai', rawReply);
+      } catch (err) {
+        const loadingEl = document.getElementById(loadingId);
+        if (loadingEl) loadingEl.remove();
+        
+        messagesBox.innerHTML += `
+          <div class="bg-rose-500/10 border border-rose-500/20 p-3 rounded-2xl text-rose-400 max-w-[85%]">
+            تعذر الاتصال بالسيرفر. تأكد من تشغيل الورك فلو في n8n.
+          </div>
+        `;
+      }
+      messagesBox.scrollTop = messagesBox.scrollHeight;
+    }
+
+    // ---------- Theme ----------
+    function setTheme(mode) {
+      document.documentElement.classList.toggle('dark', mode === 'dark');
+      localStorage.setItem('habit-tracker-theme', mode);
+      updateChart();
+    }
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.contains('dark');
+      setTheme(isDark ? 'light' : 'dark');
+    }
+
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    async function saveHabit() {
+      const name = document.getElementById('habitName').value;
+      const time = document.getElementById('habitTime').value;
+      const userId = localStorage.getItem('user_id');
+
+      if (!name) return alert('Please enter a habit name');
+
+      await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, time, user_id: userId })
+      });
+
+      alert('Habit sent to AI for processing!');
+      closeModal('addModal');
+      document.getElementById('habitName').value = '';
+      setTimeout(loadHabits, 2500);
+    }
+
+    function generateHeatmapHTML(streak) {
+      const totalDays = 28;
+      const activeStreak = Math.min(streak || 0, totalDays);
+      let boxes = '';
+
+      for (let i = totalDays; i > 0; i--) {
+        const isActive = i <= activeStreak;
+        const colorClass = isActive
+          ? 'bg-emerald-500 dark:bg-emerald-400 border-emerald-400/60 dark:border-emerald-300/60 shadow-sm shadow-emerald-500/30'
+          : 'bg-slate-200 dark:bg-slate-800/70 border-slate-300/50 dark:border-slate-700/50 opacity-60 dark:opacity-40';
+
+        boxes += `<div title="Day ${totalDays - i + 1}: ${isActive ? 'Completed' : 'Missed'}" class="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-[3px] border ${colorClass} transition-all duration-300"></div>`;
+      }
+
+      return `
+        <div class="pt-2.5 border-t border-slate-200 dark:border-white/5">
+          <div class="flex justify-between items-center mb-1.5">
+            <span class="text-[10px] sm:text-xs text-slate-500 font-medium">28-day activity</span>
+            <span class="text-[10px] sm:text-xs text-emerald-600 dark:text-emerald-400 font-mono font-semibold">${activeStreak}/${totalDays}</span>
+          </div>
+          <div class="overflow-x-auto pb-1 -mx-1 px-1">
+            <div class="grid grid-flow-col grid-rows-4 gap-1.5 justify-start min-w-max">
+              ${boxes}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function loadHabits() {
+      const userId = localStorage.getItem('user_id');
+      if (!userId) return;
+
+      try {
+        const res = await fetch(`${FLASK_API}/habits?user_id=${userId}`);
+        globalHabits = await res.json();
+        const listDiv = document.getElementById('habitsList');
+        document.getElementById('habitCount').innerText = globalHabits.length;
+
+        calculateOverallProgress(globalHabits);
+
+        if (globalHabits.length === 0) {
+          listDiv.innerHTML = '<p class="text-slate-500 text-sm">No habits added yet. Add your first one above.</p>';
+          if (progressChartInstance) { progressChartInstance.destroy(); progressChartInstance = null; }
+          return;
+        }
+
+        listDiv.innerHTML = globalHabits.map(h => `
+          <div class="habit-card p-3.5 sm:p-4 rounded-xl space-y-3 relative">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <p class="font-semibold text-slate-900 dark:text-slate-100 text-sm sm:text-base">${h.name}</p>
+                <span class="chip-time text-[11px] sm:text-xs px-2 py-0.5 rounded-md">⏰ ${h.time}</span>
+              </div>
+
+              <div class="flex items-center justify-between w-full sm:w-auto gap-3">
+                <span class="text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25 px-2.5 py-1 rounded-lg font-mono num-tab">
+                  🔥 ${h.streak || 0}d
+                </span>
+
+                <div class="relative">
+                  <button onclick="toggleMenu(${h.id})" class="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 transition">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg>
+                  </button>
+
+                  <div id="menu-${h.id}" class="hidden absolute right-0 mt-2 w-36 glass-panel rounded-xl shadow-2xl z-20 py-1 text-xs overflow-hidden">
+                    <button onclick="openEditModal(${h.id})" class="menu-item w-full text-left px-4 py-2.5 text-indigo-600 dark:text-indigo-400">✏️ Edit habit</button>
+                    <button onclick="deleteHabit(${h.id})" class="menu-item w-full text-left px-4 py-2.5 text-rose-600 dark:text-rose-400">🗑️ Delete</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            ${generateHeatmapHTML(h.streak)}
+
+            ${h.ai_tips ? `
+              <div class="bg-indigo-500/5 p-2.5 rounded-lg border border-indigo-500/15 text-xs text-slate-600 dark:text-slate-300">
+                <span class="text-indigo-600 dark:text-indigo-400 font-semibold">💡 AI tip —</span> ${h.ai_tips}
+              </div>
+            ` : ''}
+          </div>
+        `).join('');
+
+        updateChart();
+      } catch (err) {
+        console.log('Error loading habits:', err);
+      }
+    }
+
+    function toggleMenu(id) {
+      document.querySelectorAll('[id^="menu-"]').forEach(el => {
+        if (el.id !== `menu-${id}`) el.classList.add('hidden');
+      });
+      document.getElementById(`menu-${id}`).classList.toggle('hidden');
+    }
+
+    function openEditModal(id) {
+      const habit = globalHabits.find(h => h.id === id);
+      if (!habit) return;
+      document.getElementById('editHabitId').value = habit.id;
+      document.getElementById('editHabitName').value = habit.name;
+      document.getElementById('editHabitTime').value = habit.time;
+      openModal('editModal');
+    }
+
+    async function updateHabit() {
+      const id = document.getElementById('editHabitId').value;
+      const name = document.getElementById('editHabitName').value;
+      const time = document.getElementById('editHabitTime').value;
+
+      if (!name) return alert('Please enter a habit name');
+
+      await fetch(`${FLASK_API}/habits/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, time })
+      });
+
+      closeModal('editModal');
+      loadHabits();
+    }
+
+    async function deleteHabit(id) {
+      if (!confirm('Are you sure you want to delete this habit?')) return;
+      await fetch(`${FLASK_API}/habits/${id}`, { method: 'DELETE' });
+      loadHabits();
+    }
+
+    function calculateOverallProgress(habits) {
+      if (habits.length === 0) {
+        document.getElementById('overallRateText').innerText = `0%`;
+        document.getElementById('overallProgressBar').style.width = `0%`;
+        return;
+      }
+      const totalDays = habits.reduce((acc, h) => acc + (h.streak || 0), 0);
+      const targetBase = habits.length * 30;
+      const rate = Math.min(Math.round((totalDays / targetBase) * 100), 100);
+
+      document.getElementById('overallRateText').innerText = `${rate}%`;
+      document.getElementById('overallProgressBar').style.width = `${rate}%`;
+    }
+
+    function currentChartColors() {
+      const isDark = document.documentElement.classList.contains('dark');
+      return isDark
+        ? { tick: '#475569', grid: 'rgba(255,255,255,0.05)', line: '#818cf8', fillTop: 'rgba(129,140,248,0.35)',
+            tooltipBg: '#10141f', tooltipBorder: 'rgba(255,255,255,0.08)', tooltipTitle: '#f1f5f9', tooltipBody: '#94a3b8' }
+        : { tick: '#94a3b8', grid: 'rgba(15,23,42,0.06)', line: '#6366f1', fillTop: 'rgba(99,102,241,0.18)',
+            tooltipBg: '#ffffff', tooltipBorder: 'rgba(15,23,42,0.08)', tooltipTitle: '#0f172a', tooltipBody: '#475569' };
+    }
+
+    function updateChart() {
+      if (!globalHabits || globalHabits.length === 0) return;
+
+      const maxStreak = Math.max(...globalHabits.map(h => h.streak || 0), 7);
+      const labels = Array.from({ length: maxStreak }, (_, i) => `Day ${i + 1}`);
+      const dataPoints = labels.map((_, dayIndex) =>
+        globalHabits.reduce((sum, h) => sum + Math.min((h.streak || 0), dayIndex + 1), 0)
+      );
+
+      const ctx = document.getElementById('progressChart').getContext('2d');
+      const colors = currentChartColors();
+
+      const gradient = ctx.createLinearGradient(0, 0, 0, 220);
+      gradient.addColorStop(0, colors.fillTop);
+      gradient.addColorStop(1, 'rgba(129, 140, 248, 0.0)');
+
+      if (progressChartInstance) progressChartInstance.destroy();
+
+      progressChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Cumulative active-days',
+            data: dataPoints,
+            borderColor: colors.line,
+            backgroundColor: gradient,
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2.5,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: colors.line,
+            pointHoverBorderColor: colors.tooltipBg,
+            pointHoverBorderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { intersect: false, mode: 'index' },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: colors.tooltipBg,
+              borderColor: colors.tooltipBorder,
+              borderWidth: 1,
+              titleColor: colors.tooltipTitle,
+              bodyColor: colors.tooltipBody,
+              padding: 10,
+              cornerRadius: 10,
+              displayColors: false,
+              callbacks: {
+                label: (ctx) => `${ctx.parsed.y} active-days across all habits`
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: colors.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 },
+              grid: { display: false },
+              border: { color: colors.grid }
+            },
+            y: {
+              ticks: { color: colors.tick, precision: 0 },
+              grid: { color: colors.grid },
+              border: { display: false },
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    // إغلاق أي قائمة منسدلة عند النقر خارجها
+    window.onclick = function(e) {
+      if (!e.target.closest('.relative')) {
+        document.querySelectorAll('[id^="menu-"]').forEach(el => el.classList.add('hidden'));
+        const userDropdown = document.getElementById('userDropdown');
+        if (userDropdown) userDropdown.classList.add('hidden');
+      }
+    }
+
+    // Event listeners وإدارة الدخول
+    document.addEventListener('DOMContentLoaded', () => {
+      const openBtn = document.getElementById('openChatBtn');
+      const closeBtn = document.getElementById('closeChatBtn');
+
+      if (openBtn) openBtn.addEventListener('click', toggleChat);
+      if (closeBtn) closeBtn.addEventListener('click', toggleChat);
+
+      const userId = localStorage.getItem('user_id');
+      const userEmail = localStorage.getItem('user_email');
+
+      if (!userId) {
+        document.getElementById('authModal').classList.remove('hidden');
+      } else {
+        document.getElementById('authModal').classList.add('hidden');
+        updateUserInfoUI(userEmail, userId);
+        loadHabits();
+      }
+    });
+  </script>
+</body>
+</html>
